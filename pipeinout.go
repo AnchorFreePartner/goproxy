@@ -10,6 +10,7 @@ import (
 type incomingConn interface {
 	Read(b []byte) (n int, err error)
 	Write(b []byte) (n int, err error)
+	CloseWrite() error
 	Close() error
 }
 
@@ -25,6 +26,7 @@ func pipeInOut(
 	outgoing outgoingConn,
 	id string,
 	logger *log.Logger,
+	done chan<- bool,
 ) {
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -45,6 +47,7 @@ func incomingReadLoop(
 	outgoing outgoingConn,
 	id string,
 	logger *log.Logger,
+	done chan<- bool,
 ) bool {
 	sTime := time.Now()
 	buf := make([]byte, 16384)
@@ -91,9 +94,13 @@ func outgoingReadLoop(
 		if err != nil {
 			if err != io.EOF {
 				logger.Printf("%s: error reading from outgoing: %d/%d bytes, %f seconds, %v", id, total, n, time.Now().Sub(sTime).Seconds(), err)
+				incoming.Close()
+				return
 			}
 
-			break
+			incoming.CloseWrite()
+			logger.Printf("%s: connect out: done, %d bytes, %f seconds", id, total, time.Now().Sub(sTime).Seconds())
+			return
 		}
 
 		total += n
@@ -101,12 +108,8 @@ func outgoingReadLoop(
 		n, err = incoming.Write(buf[:n])
 		if err != nil {
 			logger.Printf("%s: error writing to incoming: %d/%d bytes, %f seconds, %v", id, total, n, time.Now().Sub(sTime).Seconds(), err)
-
-			break
+			incoming.Close()
+			return
 		}
 	}
-
-	incoming.Close()
-
-	logger.Printf("%s: connect out: done, %d bytes, %f seconds", id, total, time.Now().Sub(sTime).Seconds())
 }

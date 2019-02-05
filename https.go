@@ -127,7 +127,7 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 		}
 
 		pipeInOut(
-			proxyClient,
+			proxyClient.(incomingConn),
 			targetSiteCon.(outgoingConn),
 			fmt.Sprintf("%d CONNECT", ctx.Session),
 			ctx.proxy.Logger,
